@@ -229,9 +229,11 @@ calculations. Any making things pretty has to be done by you, the engineer. _
     Dim inttest As Integer      'used to test if a value for sigfigs
     Dim int_log As Integer      'used for a logic test
     Dim negdec As Integer       'the negative of the number of decimals, used for determining if an adjusted n is needed
-    Dim dec As Integer
+    Dim dec As Integer          'an always non-zero number of significant digits (minimum is one)
+    Dim neg_check As Integer    'checks and adapts for negatives
     
 'Assigns initial values to non-changing variables
+    'ensures that there is always at least one digit
     If decimals = 0 Then
         dec = 1
     Else
@@ -239,13 +241,24 @@ calculations. Any making things pretty has to be done by you, the engineer. _
     End If
     negdec = dec * -1
     exit_loop = 0
-    value = cll
+    
+    'checks for negatives
+    If cll < 0 Then
+        neg_check = -1
+        value = cll * neg_check
+    Else
+        neg_check = 1
+        value = cll
+    End If
+    
     log = WorksheetFunction.log(value)
     
-'This section will capture one sigfig of any value with log < -n
+'This section will capture one sigfig of any value with log <= 0
     'The two if statements determine if an adjustment to n is needed. If no, then n = decimals
-    If WorksheetFunction.log(cll) < 0 Then
+    If log <= 0 Then
         If (log - negdec) > 0 Then
+        ' this statement handles the finicky zone between log = -n and log = 0, its a pain.
+            'checks to see if there is an integer or zero log
             For inttest = 0 To 324
                 If (log - negdec) = inttest Then
                     int_log = 1
@@ -258,12 +271,14 @@ calculations. Any making things pretty has to be done by you, the engineer. _
                 End If
             Next
             
+            'this affects integers only
             If int_log = 1 Then
                 value_n = value * 10 ^ dec
                 n_start = WorksheetFunction.RoundUp(WorksheetFunction.log(value_n), 0)
                 n_dec = n_start + negdec
                 n_2 = n_dec + 1
                 n = dec - n_2
+            'this handles non-integers
             Else
                 value_n = value * 10 ^ dec
                 n_start = WorksheetFunction.RoundUp(WorksheetFunction.log(value_n), 0)
@@ -271,6 +286,7 @@ calculations. Any making things pretty has to be done by you, the engineer. _
                 'n_2 = n_dec + 1
                 n = dec - n_dec
             End If
+        'this handles values with log < -n
         Else
             value_n = value * 10 ^ dec
             n_start = WorksheetFunction.RoundUp(WorksheetFunction.log(value_n), 0)
@@ -279,38 +295,19 @@ calculations. Any making things pretty has to be done by you, the engineer. _
             n = dec - n_2
         End If
         
-        value = cll
-        log = WorksheetFunction.log(value)
-        
-        For count = 0 To decimals
-            If log < count Then
-                SigFigs = WorksheetFunction.Round(value, n)
-                exit_loop = 1
-                If exit_loop <> 0 Then
-                    Exit For
-                End If
-            ElseIf log >= count And n = 0 Then
-                SigFigs = WorksheetFunction.Fixed(value, 0)
-                exit_loop = 1
-                    If exit_loop <> 0 Then
-                        Exit For
-                    End If
-            Else
-                n = n - 1
-                exit_loop = 0
-            End If
-        Next
+        SigFigs = WorksheetFunction.Round(neg_check * value, n)
     Else
-        If WorksheetFunction.log(cll) < 1 Then
-            SigFigs = WorksheetFunction.Round(cll, dec - 1)
+        'values less than 10
+        If log < 1 Then
+            SigFigs = WorksheetFunction.Round(neg_check * value, dec - 1)
+        'values greater than 10
         Else
-            value = cll
             n = 0
             Do Until WorksheetFunction.log(value) < 1
                 value = value / 10
                 n = n + 1
             Loop
-            SigFigs = WorksheetFunction.Round(value, dec - 1) * 10 ^ n
+            SigFigs = WorksheetFunction.Round(neg_check * value, dec - 1) * 10 ^ n
         End If
     End If
     
